@@ -1,0 +1,69 @@
+#!/usr/bin/env lua
+-- neva - a neovim version manager
+local https = require("ssl.https")
+
+local M = {}
+
+-- print help info
+function M.help()
+    local doc = [[
+neovim version manager
+
+Usage:
+  neva [command]
+
+Availalbe Commands:
+  -h --help    Print help info
+  install      Install a specific version
+  uninstall    Uninstall a specific version
+  use          Switch to specific version
+  list         List all installed versions
+    ]]
+
+    print(doc)
+end
+
+-- test if a string is nil or emtpy
+-- https://stackoverflow.com/questions/19664666
+local function isempty(s)
+    return s == nil or s == ''
+end
+
+function M.install(version)
+    if isempty(version) then
+        print("please specific the version to install")
+    end
+    print(string.format("installing version %s", version))
+    -- TODO download tar.gz from github
+    print(string.format("install version %s successfully", version))
+end
+
+-- parse command from args list of string
+local function parse_command(args)
+    for _, v in ipairs(args) do
+        if v == "-h" or v == "--help" or v == "help" then
+            return "help"
+        end
+    end
+
+    local cmd = args[1]
+    if cmd then
+        return cmd
+    end
+
+    return "help"
+end
+
+-- main is the entry.
+function M.main(...)
+    local cmd = parse_command({...})
+    if M[cmd] then
+        M[cmd](select(2, ...))
+    else
+        M.help()
+    end
+end
+
+-- variadic
+
+M.main(table.unpack(arg))
