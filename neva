@@ -199,12 +199,13 @@ function M.use(version)
         print(string.format("%s not installed", version))
     end
 
-    if not remove_symlink(NEVA_ACTIVE_VIM) then
+    local target = NEVA_ACTIVE_VIM
+    if file_exists(target) and not remove_symlink(target) then
         print("failed to use version - remove previous symlink error")
         return
     end
 
-    if not create_symlink(version_path(version), NEVA_ACTIVE_VIM) then
+    if not create_symlink(version_path(version), target) then
         print("failed to use version - create symlink error")
     else
         print(string.format("Done! Using %s version", version))
