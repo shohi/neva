@@ -21,6 +21,7 @@ Availalbe Commands:
   uninstall    Uninstall a specific version
   use          Switch to specific version
   list/ls      List all installed versions
+  list-remote  List latest version
   clean        Remove downloaded source file
     ]]
 
@@ -60,6 +61,7 @@ local function basename(fp)
 end
 
 -- get subdir names in given folder
+-- TODO: sort by semver
 local function get_subdirs(d)
     local result = {}
     for dir in io.popen("ls -d " .. d .. "/*"):lines() do
@@ -97,6 +99,7 @@ local function check_requirements()
     check_cmd("curl", "require curl installed")
     check_cmd("tar", "require tar installed")
     check_cmd("readlink", "require readlink installed")
+    check_cmd("gojq", "require gojq installed")
 
     -- create default folder
     local cmd_create = string.format("mkdir -p %s %s",
@@ -189,7 +192,6 @@ function M.clean(version)
     end
 end
 
-
 -- use to swith the active version
 function M.use(version)
     check_version(version, "use")
@@ -209,10 +211,8 @@ function M.use(version)
     end
 end
 
--- list all installed versions
--- TODO: add M["list-remote"]
-function M.list()
-    local vs = get_subdirs(NEVA_VER_HOME)
+-- pretty print versions
+local function pretty_print(vs)
     local active = check_active()
     for _, v in ipairs(vs) do
         if active and v == active then
@@ -223,8 +223,47 @@ function M.list()
     end
 end
 
+-- compare version, used by list command
+-- TODO: follow semver
+local function comp_version(a, b)
+    if a == "nightly" then return true end
+    if b == "nightly" then return false end
+
+    return a:upper() < b:upper()
+end
+
+-- list all installed versions
+function M.list()
+    local vs = get_subdirs(NEVA_VER_HOME)
+    table.sort(vs, comp_version)
+    pretty_print(vs)
+end
+
 -- alias
 M.ls = M.list
+
+-- list-remote gets the remote latest releases
+-- TODO: fetch recent N releases
+local function list_remote()
+    -- curl --silent  | gojq ".tag_name"
+    local fetch_cmd = string.format("curl --silent '%s' | gojq -r '.tag_name'",
+        "https://api.github.com/repos/neovim/neovim/releases/latest")
+    local latest_version = io.popen(fetch_cmd):read()
+    if not latest_version or isempty(latest_version) then
+        print("failed to get remote latest release")
+        os.exit(3)
+    end
+
+    -- trim leading char `v`
+    latest_version = string.gsub(latest_version, "^v(.*)", "%1")
+
+    -- always add `nightly` version
+    local versions = {"nightly", latest_version}
+
+    pretty_print(versions)
+end
+
+M["list-remote"] = list_remote
 
 local function check_force_option(...)
     for _, v in ipairs{...} do
@@ -334,6 +373,5 @@ function M.main(...)
     end
 end
 
--- variadic
-
+-- run
 M.main(table.unpack(arg))
