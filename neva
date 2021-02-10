@@ -44,7 +44,7 @@ end
 -- https://stackoverflow.com/questions/4990990
 local function file_exists(name)
     local abspath = expand_home(name)
-    local f = io.open(abspath,"r")
+    local f = io.open(abspath, "r")
     if f ~= nil then
         io.close(f)
         return true
@@ -53,6 +53,16 @@ local function file_exists(name)
     end
 end
 
+-- test if given directory is empty
+-- https://unix.stackexchange.com/questions/202243/how-to-check-directory-is-empty
+-- NOTE: the input must be a directory
+local function is_dir_empty(dir)
+    local cmd = string.format("ls -1qA %s | grep -q '.'", dir)
+    if not os.execute(cmd) then
+        return true
+    end
+    return false
+end
 
 -- extract the basename of given filepath, suffix is not trimed.
 -- NOTE only work on unix-like system
@@ -64,6 +74,10 @@ end
 -- TODO: sort by semver
 local function get_subdirs(d)
     local result = {}
+
+    -- fast return for empty directory
+    if is_dir_empty(d) then return result end
+
     for dir in io.popen("ls -d " .. d .. "/*"):lines() do
         table.insert(result, basename(dir))
     end
