@@ -10,20 +10,19 @@ local NEVA_ACTIVE_VIM = NEVA_HOME .. "/nvim"
 -- print help info
 function M.help()
     local doc = [[
-neovim version manager
+Neovim version manager
 
 Usage:
   neva [command]
 
-Availalbe Commands:
-  -h --help    Print help info
-  install      Install a specific version
-  uninstall    Uninstall a specific version
-  use          Switch to specific version
-  list/ls      List all installed versions
-  list-remote  List latest version
-  clean        Remove downloaded source file
-    ]]
+Available Commands:
+  help                   Print help info
+  install                Install a specific version
+  uninstall              Uninstall a specific version
+  use                    Switch to specific version
+  list / ls              List all installed versions
+  list-remote            List latest version
+  clean                  Remove downloaded source file]]
 
     print(doc)
 end
@@ -103,37 +102,42 @@ end
 local function check_cmd(cmd, msg)
     local c = string.format("command -v %s &> /dev/null", cmd)
     if not os.execute(c) then
-        print(msg)
+        print("[ERR] " .. msg)
         os.exit(1)
     end
 end
 
 -- check whether requirements are ready, e.g. curl
 local function check_requirements()
-    check_cmd("curl", "require curl installed")
-    check_cmd("tar", "require tar installed")
-    check_cmd("readlink", "require readlink installed")
-    check_cmd("gojq", "require gojq installed")
+    check_cmd("curl", "Need 'curl' (command not found)")
+    check_cmd("tar", "Need 'tar' (command not found)")
+    check_cmd("readlink", "Need 'readline' (command not found)")
+    check_cmd("gojq", "Need 'gojq' (command not found)")
 
     -- create default folder
     local cmd_create = string.format("mkdir -p %s %s",
         NEVA_DL_HOME, NEVA_VER_HOME)
     if not os.execute(cmd_create) then
-        print("can't initialize neva home")
+        print("[ERR] Can't initialize neva home")
         os.exit(2)
     end
 end
 
 local NVIM_BASE_URL = "https://github.com/neovim/neovim/releases/download"
+local OS_TYPE = io.popen("uname -s", "r"):read("*l"):lower()
 
 -- url format
--- https://github.com/neovim/neovim/releases/download/nightly/nvim-macos.tar.gz
+-- https://github.com/neovim/neovim/releases/download/nightly/nvim-<OS_TYPE>.tar.gz
 local function download_url(version)
     if version ~= "nightly" then
         version = "v" .. version
     end
 
-    return NVIM_BASE_URL .. string.format("/%s/nvim-macos.tar.gz", version)
+    if OS_TYPE == "linux" then
+        return NVIM_BASE_URL .. string.format("/%s/nvim-linux64.tar.gz", version)
+    elseif OS_TYPE == "darwin" or os_type == "mac" then
+        return NVIM_BASE_URL .. string.format("/%s/nvim-macos.tar.gz", version)
+    end
 end
 
 -- local path for downloaded source file
@@ -222,7 +226,9 @@ function M.use(version)
     if not create_symlink(version_path(version), target) then
         print("failed to use version - create symlink error")
     else
-        print(string.format("Done! Using %s version", version))
+        if create_symlink(NEVA_ACTIVE_VIM .. "/bin/nvim", "$HOME/.local/bin/nvim") then
+            print(string.format("Done! Using %s version", version))
+        end
     end
 end
 
@@ -251,6 +257,7 @@ end
 function M.list()
     local vs = get_subdirs(NEVA_VER_HOME)
     table.sort(vs, comp_version)
+    print(type(vs))
     pretty_print(vs)
 end
 
@@ -293,7 +300,7 @@ end
 -- install specific version
 function M.install(version, ...)
     check_version(version, "install")
-    print(string.format("installing version %s", version))
+    print(string.format("installing version %s ...", version))
 
     local forced = check_force_option(...)
 
@@ -310,8 +317,12 @@ function M.install(version, ...)
         end
     end
 
-    -- TODO: avoid hardcoding
-    local TAR_NAME = "nvim-osx64"
+    local TAR_NAME = "nvim-"
+    if OS_TYPE == "linux" then
+        TAR_NAME = TAR_NAME .. "linux64"
+    elseif OS_TYPE == "darwin" or os_type == "mac" then
+        TAR_NAME = TAR_NAME .. "osx64"
+    end
     remove_dir(NEVA_VER_HOME .. "/" .. TAR_NAME)
 
     local tar_fp = string.format("%s/%s", NEVA_DL_HOME, filename)
@@ -334,23 +345,24 @@ function M.install(version, ...)
     if not file_exists(NEVA_ACTIVE_VIM) then
         M.use(version)
     end
-    print(string.format("install version %s successfully", version))
+    print(string.format("version %s successfully installed", version))
 end
 
 -- uninstall specific version
 function M.uninstall(version)
     check_version(version, "uninstall")
-    print(string.format("uninstalling version %s", version))
+    print(string.format("uninstalling version %s ...", version))
 
     if not contain_subdir(NEVA_VER_HOME, version) then
         goto DONE
     end
 
-    -- clear symlink
+    -- clear symlinks
     do
         local active = check_active()
         if active and active == version then
             remove_symlink(NEVA_ACTIVE_VIM)
+            remove_symlink("$HOME/.local/bin/nvim")
         end
     end
 
@@ -358,7 +370,7 @@ function M.uninstall(version)
     remove_dir(version_path(version))
 
     ::DONE::
-    print(string.format("uninstall version %s successfully", version))
+    print(string.format("version %s successfully uninstalled", version))
 end
 
 -- parse command from args list of string
