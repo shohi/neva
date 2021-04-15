@@ -52,7 +52,7 @@ local function file_exists(name)
     end
 end
 
--- split a stringm a bit modified version of
+-- split a string, a bit modified version of
 -- https://stackoverflow.com/a/20100401
 function split(s, delimiter)
     result = {};
@@ -171,7 +171,7 @@ local function download_url(version)
 
     if OS_TYPE == "linux" then
         return NVIM_BASE_URL .. string.format("/%s/nvim-linux64.tar.gz", version)
-    elseif OS_TYPE == "darwin" or os_type == "mac" then
+    elseif OS_TYPE == "darwin" or OS_TYPE == "mac" then
         return NVIM_BASE_URL .. string.format("/%s/nvim-macos.tar.gz", version)
     end
 end
