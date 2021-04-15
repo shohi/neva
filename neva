@@ -1,43 +1,40 @@
 #!/usr/bin/env lua
+
 -- neva - a neovim version manager
 local M = {}
 
 local NEVA_HOME = "$HOME/.neva"
 local NEVA_DL_HOME = NEVA_HOME .. "/downloads"
 local NEVA_VER_HOME = NEVA_HOME .. "/versions"
-local NEVA_ACTIVE_VIM = NEVA_HOME .. "/nvim"
+local NEVA_ACTIVE_VIM = NEVA_HOME .. "/current"
 
 -- print help info
 function M.help()
     local doc = [[
-neovim version manager
+neva - Neovim version manager
 
 Usage:
   neva [command]
 
-Availalbe Commands:
-  -h --help    Print help info
-  install      Install a specific version
-  uninstall    Uninstall a specific version
-  use          Switch to specific version
-  list/ls      List all installed versions
-  list-remote  List latest version
-  clean        Remove downloaded source file
-    ]]
+Available Commands:
+  help, --help, -h       Print help info
+  install                Install a specific version
+  uninstall              Uninstall a specific version
+  use                    Switch to specific version
+  list, ls               List all installed versions
+  list-remote            List latest version
+  clean                  Remove downloaded source file(s if no version was specified)]]
 
     print(doc)
 end
 
 -- test if a string is nil or emtpy
 -- https://stackoverflow.com/questions/19664666
-local function isempty(s)
-    return s == nil or s == ''
-end
+local function isempty(s) return s == nil or s == '' end
 
 -- replace $HOME env
-local function expand_home(fp)
-    return string.gsub(fp, "$HOME", os.getenv("HOME"))
-end
+local function expand_home(fp) return
+    string.gsub(fp, "$HOME", os.getenv("HOME")) end
 
 -- test if the file exists
 -- note that the code only tests whether the file can be opened for reading.
@@ -53,47 +50,81 @@ local function file_exists(name)
     end
 end
 
+-- split a string, a bit modified version of
+-- https://stackoverflow.com/a/20100401
+--
+-- This split function is the equivalent of the split function found
+-- in other languages. This is a split version with some modifications
+-- as it has only one specific use, these modifications are documented
+-- within the function.
+function split(s, delimiter)
+    result = {};
+    for match in (s .. delimiter):gmatch("(.-)" .. delimiter) do
+        if not isempty(match) then
+            -- trim leading char `v`
+            match = string.gsub(match, "^v(.*)", "%1")
+            table.insert(result, match);
+        end
+        -- If there are 11 elements in the list,
+        -- we will only return 10 because the tag below
+        -- "nigthly" is "0.4.4" and that is the same as "stable" tag,
+        -- so it will be ambiguous to keep it.
+        if #result == 11 then
+            table.remove(result, 2)
+            break
+        end
+    end
+
+    return result;
+end
+
 -- test if given directory is empty
 -- https://unix.stackexchange.com/questions/202243/how-to-check-directory-is-empty
 -- NOTE: the input must be a directory
 local function is_dir_empty(dir)
     local cmd = string.format("ls -1qA %s | grep -q '.'", dir)
-    if not os.execute(cmd) then
-        return true
-    end
+    if not os.execute(cmd) then return true end
     return false
 end
 
 -- extract the basename of given filepath, suffix is not trimed.
--- NOTE only work on unix-like system
-local function basename(fp)
-    return string.match(fp, ".*/(.*)")
-end
+-- NOTE: only work on unix-like system
+local function basename(fp) return string.match(fp, ".*/(.*)") end
 
 -- get subdir names in given folder
 -- TODO: sort by semver
-local function get_subdirs(d)
+local function get_subdirs(parent_dir)
     local result = {}
 
     -- fast return for empty directory
-    if is_dir_empty(d) then return result end
+    if is_dir_empty(parent_dir) then return result end
 
-    for dir in io.popen("ls -d " .. d .. "/*"):lines() do
+    for dir in io.popen("ls -d " .. parent_dir .. "/*"):lines() do
         table.insert(result, basename(dir))
     end
 
     return result
 end
 
+-- get files in given folder
+local function get_files(dir)
+    local results = {}
+
+    -- fast return for empty directory
+    if is_dir_empty(dir) then return results end
+
+    for file in io.popen("ls " .. dir):lines() do
+        table.insert(results, dir .. "/" .. file)
+    end
+
+    return results
+end
+
 -- check whether the dir contains given subdir
 local function contain_subdir(dir, subdir)
     local vs = get_subdirs(dir)
 
-    for _, v in ipairs(vs) do
-        if subdir == v then
-            return true
-        end
-    end
+    for _, v in ipairs(vs) do if subdir == v then return true end end
 
     return false
 end
@@ -103,37 +134,43 @@ end
 local function check_cmd(cmd, msg)
     local c = string.format("command -v %s &> /dev/null", cmd)
     if not os.execute(c) then
-        print(msg)
-        os.exit(1)
+        print("[ERR] " .. msg)
+        os.exit(2)
     end
 end
 
 -- check whether requirements are ready, e.g. curl
 local function check_requirements()
-    check_cmd("curl", "require curl installed")
-    check_cmd("tar", "require tar installed")
-    check_cmd("readlink", "require readlink installed")
-    check_cmd("gojq", "require gojq installed")
+    check_cmd("curl", "Need 'curl' (command not found)")
+    check_cmd("tar", "Need 'tar' (command not found)")
+    check_cmd("readlink", "Need 'readline' (command not found)")
+    check_cmd("gojq", "Need 'gojq' (command not found)")
 
     -- create default folder
-    local cmd_create = string.format("mkdir -p %s %s",
-        NEVA_DL_HOME, NEVA_VER_HOME)
+    local cmd_create = string.format("mkdir -p %s %s", NEVA_DL_HOME,
+                                     NEVA_VER_HOME)
     if not os.execute(cmd_create) then
-        print("can't initialize neva home")
+        print("[ERR] Can't initialize neva home")
         os.exit(2)
     end
 end
 
 local NVIM_BASE_URL = "https://github.com/neovim/neovim/releases/download"
+local OS_TYPE = io.popen("uname -s", "r"):read("*l"):lower()
 
 -- url format
--- https://github.com/neovim/neovim/releases/download/nightly/nvim-macos.tar.gz
+-- https://github.com/neovim/neovim/releases/download/nightly/nvim-<OS_TYPE>.tar.gz
 local function download_url(version)
-    if version ~= "nightly" then
+    if version ~= "nightly" and version ~= "stable" then
         version = "v" .. version
     end
 
-    return NVIM_BASE_URL .. string.format("/%s/nvim-macos.tar.gz", version)
+    if OS_TYPE == "linux" then
+        return NVIM_BASE_URL ..
+                   string.format("/%s/nvim-linux64.tar.gz", version)
+    elseif OS_TYPE == "darwin" or OS_TYPE == "mac" then
+        return NVIM_BASE_URL .. string.format("/%s/nvim-macos.tar.gz", version)
+    end
 end
 
 -- local path for downloaded source file
@@ -143,23 +180,19 @@ local function download_path(version)
     return NEVA_DL_HOME .. "/" .. filename, filename
 end
 
-local function version_path(version)
-    return NEVA_VER_HOME .. "/" .. version
-end
+local function version_path(version) return NEVA_VER_HOME .. "/" .. version end
 
 -- remove dir using `rm -rf`
 local function remove_dir(dir)
     local cmd = string.format("rm -rf %s", dir)
-    if not os.execute(cmd) then
-        return false
-    end
+    if not os.execute(cmd) then return false end
 
     return true
 end
 
 local function check_version(version, info)
     if isempty(version) then
-        print(string.format("please specific the version to %s", info))
+        print(string.format("[ERR] Please specific the version to %s", info))
         os.exit(1)
     end
 end
@@ -172,18 +205,14 @@ local function check_active()
     -- read symbolic link
     local cmd = string.format("readlink %s", active_link)
     local real_path = io.popen(cmd):read()
-    if not real_path then
-        return nil
-    end
+    if not real_path then return nil end
 
     return basename(real_path)
 end
 
 local function create_symlink(target, link)
     local cmd = string.format("ln -sf %s %s", target, link)
-    if not os.execute(cmd) then
-        return false
-    end
+    if not os.execute(cmd) then return false end
 
     return true
 end
@@ -197,12 +226,35 @@ local function remove_symlink(link)
     end
 end
 
--- clean removes downloaded tar file
+-- clean removes downloaded tar file,
+-- if a version is not specified then clean all downloaded tar files
 function M.clean(version)
-    local p = download_path(version)
-    local ok, msg = os.remove(expand_home(p))
-    if not ok and not string.find(msg, "No such file or directory") then
-        print(msg)
+    -- If there are no installed versions then raise error
+    if is_dir_empty(NEVA_DL_HOME) then
+        print("[ERR] No versions downloaded")
+        os.exit(2)
+    end
+
+    if isempty(version) then
+        print("Cleaning all downloaded versions ...")
+        local path = NEVA_DL_HOME
+        local downloaded_versions = get_files(path)
+        for _, file in pairs(downloaded_versions) do
+            os.remove(expand_home(file))
+        end
+        print("All versions successfully cleaned")
+    else
+        print(string.format("Cleaning version %s ...", version))
+        local path = download_path(version)
+        local ok, msg = os.remove(expand_home(path))
+        if not ok and string.find(msg, "No such file or directory") then
+            print(string.format(
+                      "[ERR] Failed to clean version - version %s isn't downloaded.",
+                      version))
+            os.exit(2)
+        elseif ok then
+            print(string.format("Cleaned version %s", version))
+        end
     end
 end
 
@@ -210,19 +262,26 @@ end
 function M.use(version)
     check_version(version, "use")
     if not contain_subdir(NEVA_VER_HOME, version) then
-        print(string.format("%s not installed", version))
+        print(string.format(
+                  "[ERR] Failed to use version - version %s isn't installed",
+                  version))
+        os.exit(2)
     end
 
     local target = NEVA_ACTIVE_VIM
     if file_exists(target) and not remove_symlink(target) then
-        print("failed to use version - remove previous symlink error")
-        return
+        print("[ERR] Failed to use version - remove previous symlink error")
+        os.exit(1)
     end
 
     if not create_symlink(version_path(version), target) then
-        print("failed to use version - create symlink error")
+        print("[ERR] Failed to use version - create symlink error")
+        os.exit(1)
     else
-        print(string.format("Done! Using %s version", version))
+        if create_symlink(NEVA_ACTIVE_VIM .. "/bin/nvim",
+                          "$HOME/.local/bin/nvim") then
+            print(string.format("Done! Using version %s", version))
+        end
     end
 end
 
@@ -236,22 +295,32 @@ local function pretty_print(vs)
             print(string.format("  %s", v))
         end
     end
+    -- Print a tiny legend guide
+    print("\n* Version you are currently using")
 end
 
 -- compare version, used by list command
--- TODO: follow semver
-local function comp_version(a, b)
-    if a == "nightly" then return true end
-    if b == "nightly" then return false end
+-- order:
+--  nightly
+--  stable
+--  0.x.x
+local function compare_version(first, second)
+    if first == "nightly" then return true end
+    if second == "nightly" then return false end
 
-    return a:upper() < b:upper()
+    return first:upper() > second:upper()
 end
 
 -- list all installed versions
 function M.list()
-    local vs = get_subdirs(NEVA_VER_HOME)
-    table.sort(vs, comp_version)
-    pretty_print(vs)
+    local installed_versions = get_subdirs(NEVA_VER_HOME)
+    -- If the versions table is empty
+    if next(installed_versions) == nil then
+        print("You don't have any version installed.")
+        return
+    end
+    table.sort(installed_versions, compare_version)
+    pretty_print(installed_versions)
 end
 
 -- alias
@@ -260,20 +329,21 @@ M.ls = M.list
 -- list-remote gets the remote latest releases
 -- TODO: fetch recent N releases
 local function list_remote()
-    -- curl --silent  | gojq ".tag_name"
-    local fetch_cmd = string.format("curl --silent '%s' | gojq -r '.tag_name'",
-        "https://api.github.com/repos/neovim/neovim/releases/latest")
-    local latest_version = io.popen(fetch_cmd):read()
-    if not latest_version or isempty(latest_version) then
-        print("failed to get remote latest release")
+    print("Fetching remote versions ...")
+    local fetch_cmd = string.format(
+                          "curl --silent '%s' | gojq '.[] | .tag_name'",
+                          "https://api.github.com/repos/neovim/neovim/releases")
+    local remote_versions = io.popen(fetch_cmd):read("*a")
+    if not remote_versions or isempty(remote_versions) then
+        print("[ERR] Failed to get remote releases")
         os.exit(3)
     end
 
     -- trim leading char `v`
-    latest_version = string.gsub(latest_version, "^v(.*)", "%1")
+    remote_versions = string.gsub(remote_versions, '%"', "")
 
     -- always add `nightly` version
-    local versions = {"nightly", latest_version}
+    local versions = split(remote_versions, "\n")
 
     pretty_print(versions)
 end
@@ -281,10 +351,8 @@ end
 M["list-remote"] = list_remote
 
 local function check_force_option(...)
-    for _, v in ipairs{...} do
-        if v == "-f" or v == "--force" then
-            return true
-        end
+    for _, v in ipairs {...} do
+        if v == "-f" or v == "--force" then return true end
     end
 
     return false
@@ -293,7 +361,7 @@ end
 -- install specific version
 function M.install(version, ...)
     check_version(version, "install")
-    print(string.format("installing version %s", version))
+    print(string.format("Installing version %s ...", version))
 
     local forced = check_force_option(...)
 
@@ -303,76 +371,75 @@ function M.install(version, ...)
         local dl_url = download_url(version)
         local cmd = string.format("curl -L -o %s %s", dl_path, dl_url)
 
-        print(string.format("downloading %s", dl_url))
+        print(string.format("Downloading %s ...", dl_url))
         if not os.execute(cmd) then
-            print(string.format("failed to download nvim - %s", dl_url))
+            print(string.format("\n[ERR] Failed to download nvim - %s", dl_url))
             os.exit(2)
         end
     end
 
-    -- TODO: avoid hardcoding
-    local TAR_NAME = "nvim-osx64"
+    local TAR_NAME = "nvim-"
+    if OS_TYPE == "linux" then
+        TAR_NAME = TAR_NAME .. "linux64"
+    elseif OS_TYPE == "darwin" or os_type == "mac" then
+        TAR_NAME = TAR_NAME .. "osx64"
+    end
     remove_dir(NEVA_VER_HOME .. "/" .. TAR_NAME)
 
     local tar_fp = string.format("%s/%s", NEVA_DL_HOME, filename)
     local extract_cmd = string.format("cd %s && tar -xf %s && mv %s %s",
-        NEVA_VER_HOME, tar_fp, TAR_NAME, version)
+                                      NEVA_VER_HOME, tar_fp, TAR_NAME, version)
 
-    if not forced and file_exists(version_path(version)) then
-        goto INSTALLED
-    end
+    if not forced and file_exists(version_path(version)) then goto INSTALLED end
 
     remove_dir(version_path(version))
     if not os.execute(extract_cmd) then
-        print("failed to install nvim")
+        print("[ERR] Failed to install nvim")
         os.exit(3)
     end
 
     ::INSTALLED::
 
     -- check default link
-    if not file_exists(NEVA_ACTIVE_VIM) then
-        M.use(version)
-    end
-    print(string.format("install version %s successfully", version))
+    if not file_exists(NEVA_ACTIVE_VIM) then M.use(version) end
+    print(string.format("version %s successfully installed", version))
 end
 
 -- uninstall specific version
 function M.uninstall(version)
     check_version(version, "uninstall")
-    print(string.format("uninstalling version %s", version))
 
+    -- If the version is not installed then raise error
     if not contain_subdir(NEVA_VER_HOME, version) then
-        goto DONE
+        print(string.format("[ERR] Version %s not installed", version))
+        os.exit(2)
     end
 
-    -- clear symlink
+    print(string.format("Uninstalling version %s ...", version))
+
+    -- clear symlinks
     do
         local active = check_active()
         if active and active == version then
             remove_symlink(NEVA_ACTIVE_VIM)
+            remove_symlink("$HOME/.local/bin/nvim")
         end
     end
 
     -- remove files under versions
     remove_dir(version_path(version))
 
-    ::DONE::
-    print(string.format("uninstall version %s successfully", version))
+    print(string.format("version %s successfully uninstalled", version))
 end
 
 -- parse command from args list of string
 local function parse_command(args)
     for _, v in ipairs(args) do
-        if v == "-h" or v == "--help" or v == "help" then
-            return "help"
-        end
+        if v == "-h" or v == "--help" or v == "help" then return "help" end
     end
 
     local cmd = args[1]
-    if cmd then
-        return cmd
-    end
+    if cmd then return cmd end
 
     return "help"
 end
@@ -384,7 +451,9 @@ function M.main(...)
     if M[cmd] then
         M[cmd](select(2, ...))
     else
+        print(string.format("[ERR] Unknown command \"%s\"\n", cmd))
         M.help()
+        os.exit(1)
     end
 end
 
