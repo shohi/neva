@@ -75,7 +75,7 @@ function split(s, delimiter)
         end
     end
 
-    return result;
+    return result
 end
 
 -- test if given directory is empty
@@ -83,8 +83,7 @@ end
 -- NOTE: the input must be a directory
 local function is_dir_empty(dir)
     local cmd = string.format("ls -1qA %s | grep -q '.'", dir)
-    if not os.execute(cmd) then return true end
-    return false
+    return not os.execute(cmd)
 end
 
 -- extract the basename of given filepath, suffix is not trimed.
@@ -166,10 +165,9 @@ local function download_url(version)
     end
 
     if OS_TYPE == "linux" then
-        return NVIM_BASE_URL ..
-                   string.format("/%s/nvim-linux64.tar.gz", version)
+        return string.format("%s/%s/nvim-linux64.tar.gz", NVIM_BASE_URL, version)
     elseif OS_TYPE == "darwin" or OS_TYPE == "mac" then
-        return NVIM_BASE_URL .. string.format("/%s/nvim-macos.tar.gz", version)
+        return string.format("%s/%s/nvim-macos.tar.gz", NVIM_BASE_URL, version)
     end
 end
 
@@ -185,9 +183,7 @@ local function version_path(version) return NEVA_VER_HOME .. "/" .. version end
 -- remove dir using `rm -rf`
 local function remove_dir(dir)
     local cmd = string.format("rm -rf %s", dir)
-    if not os.execute(cmd) then return false end
-
-    return true
+    return not os.execute(cmd)
 end
 
 local function check_version(version, info)
@@ -212,18 +208,12 @@ end
 
 local function create_symlink(target, link)
     local cmd = string.format("ln -sf %s %s", target, link)
-    if not os.execute(cmd) then return false end
-
-    return true
+    return not os.execute(cmd)
 end
 
 local function remove_symlink(link)
     local lk = expand_home(link)
-    if os.remove(lk) then
-        return true
-    else
-        return false
-    end
+    return os.remove(lk) ~= nil
 end
 
 -- clean removes downloaded tar file,
@@ -439,9 +429,7 @@ local function parse_command(args)
     end
 
     local cmd = args[1]
-    if cmd then return cmd end
-
-    return "help"
+    return cmd or "help"
 end
 
 -- main is the entry.
