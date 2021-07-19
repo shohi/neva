@@ -430,6 +430,7 @@ function M.upgrade()
    end
 
    -- replace content
+   -- TODO: check md5
    cmd = string.format("cat %s > %s", tmp_file, M.bin_path)
    if not os.execute(cmd) then
       print("[ERR] Can't upgrade neva")
@@ -437,7 +438,13 @@ function M.upgrade()
    end
 
    -- delete tmp file
-   os.remove(expand_home(tmp_file))
+   local ok, msg = os.remove(expand_home(tmp_file))
+   if ok then
+      print("Upgrade done!")
+   else
+      print("[ERR] " .. msg)
+      os.exit(4)
+   end
 end
 
 -- uninstall specific version
