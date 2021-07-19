@@ -46,4 +46,6 @@ Available Commands:
   list, ls               List all installed versions
   list-remote            List latest version
   clean                  Remove downloaded source file(s if no version was specified)
+  version, -v            Print version info
+  upgrade                Upgrade neva
 ```

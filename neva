@@ -6,7 +6,12 @@ local M = {}
 local NEVA_HOME = "$HOME/.neva"
 local NEVA_DL_HOME = NEVA_HOME .. "/downloads"
 local NEVA_VER_HOME = NEVA_HOME .. "/versions"
+local NEVA_TMP_HOME = NEVA_HOME .. "/tmp"
 local NEVA_ACTIVE_VIM = NEVA_HOME .. "/current"
+local NEVA_VERSION = "v0.1.0"
+
+local default_neva_url = "https://github.com/shohi/neva/raw/main/neva"
+local NEVA_SOURCE_URL = os.getenv("NEVA_SOURCE_URL") or default_neva_url
 
 -- print help info
 function M.help()
@@ -23,9 +28,16 @@ Available Commands:
   use                    Switch to specific version
   list, ls               List all installed versions
   list-remote            List latest version
-  clean                  Remove downloaded source file(s if no version was specified)]]
+  clean                  Remove downloaded source file(s if no version was specified)
+  version, -v            Print version info
+  upgrade                Upgrade neva]]
 
   print(doc)
+end
+
+-- print version info
+function M.version()
+   print(string.format("neva %s", NEVA_VERSION))
 end
 
 -- test if a string is nil or emtpy
@@ -146,8 +158,8 @@ local function check_requirements()
    check_cmd("gojq", "Need 'gojq' (command not found)")
 
    -- create default folder
-   local cmd_create = string.format("mkdir -p %s %s", NEVA_DL_HOME,
-				    NEVA_VER_HOME)
+   local cmd_create = string.format("mkdir -p %s %s %s", NEVA_DL_HOME,
+				    NEVA_VER_HOME, NEVA_TMP_HOME)
    if not os.execute(cmd_create) then
       print("[ERR] Can't initialize neva home")
       os.exit(2)
@@ -214,6 +226,13 @@ end
 local function remove_symlink(link)
    local lk = expand_home(link)
    return os.remove(lk) ~= nil
+end
+
+local function is_symlink(link)
+   local lk = expand_home(link)
+   local cmd = string.format("readlink %s", lk)
+
+   return os.execute(cmd)
 end
 
 -- clean removes downloaded tar file,
@@ -395,6 +414,32 @@ function M.install(version, ...)
    print(string.format("version %s successfully installed", version))
 end
 
+-- upgrade neva itself
+function M.upgrade()
+   -- if the `neva` binary is a symbolic link, just ignore
+   if is_symlink(M.bin_path) then
+      print("`neva` is a symbolic link, upgrade not performed")
+      return
+   end
+
+   local tmp_file = string.format("%s/neva.tmp", NEVA_TMP_HOME)
+   local cmd = string.format("curl -L -o %s %s", tmp_file, NEVA_SOURCE_URL)
+   if not os.execute(cmd) then
+      print("[ERR] Can't upgrade neva")
+      os.exit(2)
+   end
+
+   -- replace content
+   cmd = string.format("cat %s > %s", tmp_file, M.bin_path)
+   if not os.execute(cmd) then
+      print("[ERR] Can't upgrade neva")
+      os.exit(3)
+   end
+
+   -- delete tmp file
+   os.remove(expand_home(tmp_file))
+end
+
 -- uninstall specific version
 function M.uninstall(version)
    check_version(version, "uninstall")
@@ -425,7 +470,11 @@ end
 -- parse command from args list of string
 local function parse_command(args)
    for _, v in ipairs(args) do
-      if v == "-h" or v == "--help" or v == "help" then return "help" end
+      if v == "-h" or v == "--help" or v == "help" then
+	 return "help"
+      elseif v == "-v" or v == "version" then
+	 return "version"
+      end
    end
 
    local cmd = args[1]
@@ -433,7 +482,9 @@ local function parse_command(args)
 end
 
 -- main is the entry.
-function M.main(...)
+function M.main(bin_path, ...)
+   M.bin_path = bin_path
+
    check_requirements()
    local cmd = parse_command({...})
    if M[cmd] then
@@ -446,4 +497,4 @@ function M.main(...)
 end
 
 -- run
-M.main(table.unpack(arg))
+M.main(arg[0], table.unpack(arg))
