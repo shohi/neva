@@ -58,19 +58,19 @@ end
 -- as it has only one specific use, these modifications are documented
 -- within the function.
 function split(s, delimiter)
-    result = {};
+    local max_num = 10
+    local result = {}
     for match in (s .. delimiter):gmatch("(.-)" .. delimiter) do
-        if not isempty(match) then
-            -- trim leading char `v`
-            match = string.gsub(match, "^v(.*)", "%1")
-            table.insert(result, match);
-        end
-        -- If there are 11 elements in the list,
-        -- we will only return 10 because the tag below
-        -- "nigthly" is "0.4.4" and that is the same as "stable" tag,
-        -- so it will be ambiguous to keep it.
-        if #result == 11 then
-            table.remove(result, 2)
+        -- trim leading char `v`
+        match = string.gsub(match, "^v(.*)", "%1")
+
+       -- As the `stable` tag is an alias to latest tag, it'll be ignored.
+        if match ~= "stable" and not isempty(match) then
+	    table.insert(result, match);
+	end
+
+	-- we will only return `max_num` items.
+        if #result == max_num then
             break
         end
     end
