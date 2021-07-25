@@ -7,7 +7,7 @@ local NEVA_HOME = "$HOME/.neva"
 local NEVA_DL_HOME = NEVA_HOME .. "/downloads"
 local NEVA_VER_HOME = NEVA_HOME .. "/versions"
 local NEVA_TMP_HOME = NEVA_HOME .. "/tmp"
-local NEVA_ACTIVE_VIM = NEVA_HOME .. "/current"
+local NEVA_ACTIVE_VIM = NEVA_HOME .. "/nvim"
 local NEVA_VERSION = "v0.1.0"
 
 local default_neva_url = "https://github.com/shohi/neva/raw/main/neva"
@@ -220,12 +220,12 @@ end
 
 local function create_symlink(target, link)
    local cmd = string.format("ln -sf %s %s", target, link)
-   return not os.execute(cmd)
+   return os.execute(cmd)
 end
 
 local function remove_symlink(link)
    local lk = expand_home(link)
-   return os.remove(lk) ~= nil
+   return os.remove(lk)
 end
 
 local function is_symlink(link)
