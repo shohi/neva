@@ -391,7 +391,7 @@ function M.install(version, ...)
    if OS_TYPE == "linux" then
       TAR_NAME = TAR_NAME .. "linux64"
    elseif OS_TYPE == "darwin" or os_type == "mac" then
-      TAR_NAME = TAR_NAME .. "osx64"
+      TAR_NAME = TAR_NAME .. "macos"
    end
    remove_dir(NEVA_VER_HOME .. "/" .. TAR_NAME)
 
