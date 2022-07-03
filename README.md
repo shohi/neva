@@ -1,6 +1,7 @@
-# neva
+# neva is moving from GitHub to sr.ht
 
-A Neovim version manager
+A Neovim version manager.
+
 
 ## Supported systems
 
