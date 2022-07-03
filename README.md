@@ -1,5 +1,10 @@
 # neva is moving from GitHub to sr.ht
 
+https://git.sr.ht/~shohi/neva
+
+
+## README
+
 A Neovim version manager.
 
 
